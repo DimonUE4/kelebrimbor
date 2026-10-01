@@ -1,6 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const path = require("path");
+const fs = require("fs");
 
 dotenv.config();
 
@@ -8,6 +9,30 @@ const app = express();
 
 const PORT = process.env.PORT || 3000;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+const USERS_FILE = path.join(__dirname, "telegram-users.json");
+
+function loadTelegramUsers() {
+    if (!fs.existsSync(USERS_FILE)) {
+        return [];
+    }
+
+    try {
+        return JSON.parse(
+            fs.readFileSync(USERS_FILE, "utf8")
+        );
+    } catch {
+        return [];
+    }
+}
+
+function saveTelegramUsers(users) {
+    fs.writeFileSync(
+        USERS_FILE,
+        JSON.stringify(users, null, 2),
+        "utf8"
+    );
+}
 
 console.log(
     "Telegram token loaded:",
