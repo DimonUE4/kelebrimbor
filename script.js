@@ -1182,3 +1182,120 @@ if (sendTelegramBtn) {
         }
     });
 }
+
+
+const connectTelegramBtn =
+    document.getElementById("connectTelegramBtn");
+
+const telegramUsersList =
+    document.getElementById("telegramUsersList");
+
+
+async function loadTelegramUsers() {
+    try {
+        const response =
+            await fetch("/api/telegram/users");
+
+        const data =
+            await response.json();
+
+        if (!data.success) {
+            throw new Error(
+                data.error || "Failed to load users"
+            );
+        }
+
+        telegramUsersList.innerHTML = "";
+
+        if (data.users.length === 0) {
+            telegramUsersList.innerHTML =
+                "<p>No Telegram users connected.</p>";
+
+            return;
+        }
+
+        data.users.forEach(user => {
+            const element =
+                document.createElement("div");
+
+            const name = [
+                user.firstName,
+                user.lastName
+            ]
+                .filter(Boolean)
+                .join(" ");
+
+            element.innerHTML = `
+                <label>
+                    <input
+                        type="checkbox"
+                        value="${user.chatId}"
+                        class="telegram-user"
+                    >
+
+                    ${name || "Unknown user"}
+
+                    ${
+                        user.username
+                            ? `(@${user.username})`
+                            : ""
+                    }
+                </label>
+            `;
+
+            telegramUsersList.appendChild(element);
+        });
+
+    } catch (error) {
+        console.error(error);
+
+        telegramUsersList.innerHTML =
+            `<p>✕ ${error.message}</p>`;
+    }
+}
+
+
+if (connectTelegramBtn) {
+    connectTelegramBtn.addEventListener(
+        "click",
+        async () => {
+
+            connectTelegramBtn.disabled = true;
+            connectTelegramBtn.textContent =
+                "CHECKING...";
+
+            try {
+                const response =
+                    await fetch(
+                        "/api/telegram/connect"
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!data.success) {
+                    throw new Error(
+                        data.error ||
+                        "Failed to connect Telegram users"
+                    );
+                }
+
+                await loadTelegramUsers();
+
+            } catch (error) {
+                console.error(error);
+
+                telegramUsersList.innerHTML =
+                    `<p>✕ ${error.message}</p>`;
+
+            } finally {
+                connectTelegramBtn.disabled = false;
+                connectTelegramBtn.textContent =
+                    "CHECK FOR NEW USERS";
+            }
+        }
+    );
+}
+
+
+loadTelegramUsers();
