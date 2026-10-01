@@ -42,6 +42,7 @@ const DEFAULT_CONFIG = {
 ========================================= */
 
 let state = loadState();
+let telegramUsers = [];
 
 
 /* =========================================
@@ -1210,18 +1211,21 @@ const telegramUsersList =
 
 
 async function loadTelegramUsers() {
+    
     try {
         const response =
             await fetch("/api/telegram/users");
 
-        const data =
-            await response.json();
+       const data =
+    await response.json();
 
-        if (!data.success) {
-            throw new Error(
-                data.error || "Failed to load users"
-            );
-        }
+if (!data.success) {
+    throw new Error(
+        data.error || "Failed to load users"
+    );
+}
+
+telegramUsers = data.users;
 
         telegramUsersList.innerHTML = "";
 
@@ -1233,36 +1237,49 @@ async function loadTelegramUsers() {
         }
 
         data.users.forEach(user => {
-            const element =
-                document.createElement("div");
 
-            const name = [
-                user.firstName,
-                user.lastName
-            ]
-                .filter(Boolean)
-                .join(" ");
+    const element =
+        document.createElement("div");
 
-            element.innerHTML = `
-                <label>
-                    <input
-                        type="checkbox"
-                        value="${user.chatId}"
-                        class="telegram-user"
-                    >
+    const name = [
+        user.firstName,
+        user.lastName
+    ]
+        .filter(Boolean)
+        .join(" ");
 
-                    ${name || "Unknown user"}
+    element.innerHTML = `
+        <label>
+            <input
+                type="checkbox"
+                value="${user.chatId}"
+                class="telegram-user"
+            >
 
-                    ${
-                        user.username
-                            ? `(@${user.username})`
-                            : ""
-                    }
-                </label>
-            `;
+            ${name || "Unknown user"}
 
-            telegramUsersList.appendChild(element);
-        });
+            ${
+                user.username
+                    ? `(@${user.username})`
+                    : ""
+            }
+        </label>
+    `;
+
+    telegramUsersList.appendChild(
+        element
+    );
+
+    const checkbox =
+        element.querySelector(
+            ".telegram-user"
+        );
+
+    checkbox.addEventListener(
+        "change",
+        updateMessageFields
+    );
+});
 
     } catch (error) {
         console.error(error);
@@ -1317,3 +1334,172 @@ if (connectTelegramBtn) {
 
 
 loadTelegramUsers();
+
+const selectedMessages =
+    document.getElementById("selectedMessages");
+
+const saveSwitchBtn =
+    document.getElementById("saveSwitchBtn");
+
+const testTriggerBtn =
+    document.getElementById("testTriggerBtn");
+
+const deadlineInput =
+    document.getElementById("deadlineInput");
+
+const switchStatus =
+    document.getElementById("switchStatus");
+
+
+function updateMessageFields() {
+
+    const checkboxes =
+        document.querySelectorAll(
+            ".telegram-user:checked"
+        );
+
+    selectedMessages.innerHTML = "";
+
+    checkboxes.forEach(checkbox => {
+
+        const chatId = checkbox.value;
+
+        const user =
+            telegramUsers.find(
+                user =>
+                    String(user.chatId) ===
+                    String(chatId)
+            );
+
+        if (!user) {
+            return;
+        }
+
+        const name = [
+            user.firstName,
+            user.lastName
+        ]
+            .filter(Boolean)
+            .join(" ");
+
+        const container =
+            document.createElement("div");
+
+        container.className =
+            "telegram-message";
+
+        container.innerHTML = `
+            <h4>
+                Message for ${name || "Unknown user"}
+            </h4>
+
+            <textarea
+                class="telegram-message-input"
+                data-chat-id="${chatId}"
+                rows="5"
+                placeholder="Message for this person..."
+            ></textarea>
+        `;
+
+        selectedMessages.appendChild(
+            container
+        );
+    });
+}
+
+if (saveSwitchBtn) {
+
+    saveSwitchBtn.addEventListener(
+        "click",
+        async () => {
+
+            try {
+
+                const deadline =
+                    deadlineInput.value;
+
+                if (!deadline) {
+                    throw new Error(
+                        "Select a deadline."
+                    );
+                }
+
+                const checkboxes =
+                    document.querySelectorAll(
+                        ".telegram-user:checked"
+                    );
+
+                if (checkboxes.length === 0) {
+                    throw new Error(
+                        "Select at least one recipient."
+                    );
+                }
+
+                const recipients = [];
+
+                checkboxes.forEach(
+                    checkbox => {
+
+                        const messageInput =
+                            document.querySelector(
+                                `.telegram-message-input[data-chat-id="${checkbox.value}"]`
+                            );
+
+                        recipients.push({
+                            chatId: checkbox.value,
+                            message:
+                                messageInput?.value || ""
+                        });
+                    }
+                );
+
+                for (const recipient of recipients) {
+
+                    if (!recipient.message.trim()) {
+                        throw new Error(
+                            "Every recipient must have a message."
+                        );
+                    }
+                }
+
+                const response =
+                    await fetch(
+                        "/api/switch/save",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify({
+                                deadline,
+                                recipients
+                            })
+                        }
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.error ||
+                        "Failed to save switch"
+                    );
+                }
+
+                switchStatus.textContent =
+                    "✓ Dead Man Switch saved.";
+
+            } catch (error) {
+
+                console.error(error);
+
+                switchStatus.textContent =
+                    `✕ ${error.message}`;
+            }
+        }
+    );
+}
