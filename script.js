@@ -1111,3 +1111,74 @@ function escapeHtml(value) {
         .replaceAll("'", "&#039;");
 
 }
+
+const sendTelegramBtn = document.getElementById("sendTelegramBtn");
+const telegramStatus = document.getElementById("telegramStatus");
+
+if (sendTelegramBtn) {
+    sendTelegramBtn.addEventListener("click", async () => {
+        sendTelegramBtn.disabled = true;
+        telegramStatus.textContent = "Sending...";
+
+        try {
+            // Получаем доступные Telegram-чаты
+            const updatesResponse = await fetch("/api/telegram/updates");
+            const updatesData = await updatesResponse.json();
+
+            if (!updatesResponse.ok) {
+                throw new Error(
+                    updatesData.error || "Failed to get Telegram chats"
+                );
+            }
+
+            if (!updatesData.chats || updatesData.chats.length === 0) {
+                throw new Error(
+                    "No Telegram chats found. Open the bot in Telegram and send /start first."
+                );
+            }
+
+            // Берём первый найденный чат
+            const chat = updatesData.chats[0];
+
+            // Отправляем сообщение
+            const sendResponse = await fetch("/api/telegram/send", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    chatIds: [String(chat.id)],
+                    message: "✅ Dead Man Switch: Telegram connection works!"
+                })
+            });
+
+            const sendData = await sendResponse.json();
+
+            if (!sendResponse.ok) {
+                throw new Error(
+                    sendData.error || "Failed to send Telegram message"
+                );
+            }
+
+            const result = sendData.results?.[0];
+
+            if (!result || !result.success) {
+                throw new Error(
+                    result?.error || "Telegram message was not sent"
+                );
+            }
+
+            telegramStatus.textContent =
+                `✓ Message sent to ${chat.title || chat.id}`;
+
+        } catch (error) {
+            console.error(error);
+
+            telegramStatus.textContent =
+                `✕ ${error.message}`;
+
+        } finally {
+            sendTelegramBtn.disabled = false;
+        }
+    });
+}
