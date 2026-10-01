@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Dead Man Switch</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- LOGIN -->
+
+    <main id="loginPage" class="page login-page">
+
+        <div class="login-container">
+
+            <div class="brand">
+                <div class="brand-mark"></div>
+
+                <div>
+                    <div class="brand-title">DEAD MAN SWITCH</div>
+                    <div class="brand-subtitle">PERSONAL CONTROL SYSTEM</div>
+                </div>
+            </div>
+
+            <div class="login-box">
+
+                <div class="login-heading">
+                    <h1>Welcome back</h1>
+                    <p>Authenticate to access your control panel.</p>
+                </div>
+
+                <form id="loginForm">
+
+                    <div class="input-group">
+                        <label for="username">Username</label>
+
+                        <input
+                            id="username"
+                            type="text"
+                            autocomplete="username"
+                            placeholder="Username"
+                            required
+                        >
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Password</label>
+
+                        <input
+                            id="password"
+                            type="password"
+                            autocomplete="current-password"
+                            placeholder="Password"
+                            required
+                        >
+                    </div>
+
+                    <div id="loginError" class="form-error"></div>
+
+                    <button class="primary-button" type="submit">
+                        <span>AUTHENTICATE</span>
+                        <span>→</span>
+                    </button>
+
+                </form>
+
+                <div class="login-footer">
+                    Local prototype · No server connection
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+
+    <!-- DASHBOARD -->
+
+    <main id="dashboardPage" class="page dashboard-page hidden">
+
+        <header class="topbar">
+
+            <div class="brand">
+                <div class="brand-mark"></div>
+
+                <div>
+                    <div class="brand-title">DEAD MAN SWITCH</div>
+                    <div class="brand-subtitle">CONTROL PANEL</div>
+                </div>
+            </div>
+
+            <div class="topbar-right">
+
+                <div class="connection-status">
+                    <span class="status-dot"></span>
+                    LOCAL MODE
+                </div>
+
+                <button id="logoutButton" class="logout-button">
+                    LOG OUT
+                </button>
+
+            </div>
+
+        </header>
+
+
+        <section class="dashboard">
+
+            <div class="dashboard-header">
+
+                <div>
+                    <div class="eyebrow">SYSTEM OVERVIEW</div>
+
+                    <h1>Control Panel</h1>
+
+                    <p>
+                        Monitor your Dead Man Switch and confirm that you're alive.
+                    </p>
+                </div>
+
+                <div id="systemBadge" class="system-badge armed">
+                    <span class="status-dot"></span>
+                    ARMED
+                </div>
+
+            </div>
+
+
+            <!-- MAIN STATUS -->
+
+            <section class="status-panel">
+
+                <div class="status-left">
+
+                    <div class="status-label">
+                        CURRENT STATUS
+                    </div>
+
+                    <div id="statusTitle" class="status-title">
+                        SYSTEM ARMED
+                    </div>
+
+                    <div id="statusDescription" class="status-description">
+                        The switch is active and waiting for your next confirmation.
+                    </div>
+
+                </div>
+
+                <div class="status-right">
+
+                    <div class="countdown-label">
+                        TIME REMAINING
+                    </div>
+
+                    <div id="countdown" class="countdown">
+                        --:--:--
+                    </div>
+
+                    <div id="deadlineText" class="deadline">
+                        Deadline: —
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- I'M ALIVE -->
+
+            <section class="alive-section">
+
+                <button id="aliveButton" class="alive-button">
+
+                    <div class="alive-icon">
+                        ✓
+                    </div>
+
+                    <div class="alive-content">
+
+                        <div class="alive-title">
+                            I'M ALIVE
+                        </div>
+
+                        <div class="alive-description">
+                            Reset the countdown and confirm your presence.
+                        </div>
+
+                    </div>
+
+                    <div class="alive-arrow">
+                        →
+                    </div>
+
+                </button>
+
+                <div id="lastConfirmation" class="confirmation-info">
+                    Last confirmation: —
+                </div>
+
+            </section>
+
+
+            <!-- INFORMATION GRID -->
+
+            <section class="information-grid">
+
+                <div class="panel">
+
+                    <div class="panel-header">
+                        <span>SWITCH CONFIGURATION</span>
+                        <span class="panel-number">01</span>
+                    </div>
+
+                    <div class="settings-list">
+
+                        <div class="setting">
+
+                            <div>
+                                <div class="setting-title">
+                                    Deadline
+                                </div>
+
+                                <div id="settingsDeadline" class="setting-value">
+                                    —
+                                </div>
+                            </div>
+
+                            <button id="editDeadline" class="small-button">
+                                EDIT
+                            </button>
+
+                        </div>
+
+
+                        <div class="setting">
+
+                            <div>
+                                <div class="setting-title">
+                                    Grace period
+                                </div>
+
+                                <div id="gracePeriod" class="setting-value">
+                                    30 minutes
+                                </div>
+                            </div>
+
+                            <button id="editGrace" class="small-button">
+                                EDIT
+                            </button>
+
+                        </div>
+
+
+                        <div class="setting">
+
+                            <div>
+                                <div class="setting-title">
+                                    Switch state
+                                </div>
+
+                                <div id="switchState" class="setting-value active">
+                                    ACTIVE
+                                </div>
+                            </div>
+
+                            <button id="toggleSwitch" class="small-button">
+                                DISARM
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="panel">
+
+                    <div class="panel-header">
+                        <span>TRIGGER ACTIONS</span>
+                        <span class="panel-number">02</span>
+                    </div>
+
+                    <div class="actions-list">
+
+                        <div class="action-row">
+
+                            <div class="action-icon">
+                                TG
+                            </div>
+
+                            <div class="action-info">
+                                <div class="setting-title">
+                                    Telegram
+                                </div>
+
+                                <div class="setting-value">
+                                    Send message
+                                </div>
+                            </div>
+
+                            <div class="action-state enabled">
+                                ENABLED
+                            </div>
+
+                        </div>
+
+
+                        <div class="action-row">
+
+                            <div class="action-icon">
+                                IMG
+                            </div>
+
+                            <div class="action-info">
+                                <div class="setting-title">
+                                    Photos
+                                </div>
+
+                                <div class="setting-value">
+                                    Publish media
+                                </div>
+                            </div>
+
+                            <div class="action-state disabled">
+                                DISABLED
+                            </div>
+
+                        </div>
+
+
+                        <div class="action-row">
+
+                            <div class="action-icon">
+                                VID
+                            </div>
+
+                            <div class="action-info">
+                                <div class="setting-title">
+                                    Video
+                                </div>
+
+                                <div class="setting-value">
+                                    Publish video
+                                </div>
+                            </div>
+
+                            <div class="action-state disabled">
+                                DISABLED
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <!-- ACTIVITY -->
+
+            <section class="panel activity-panel">
+
+                <div class="panel-header">
+
+                    <span>ACTIVITY LOG</span>
+
+                    <button id="clearLog" class="text-button">
+                        CLEAR
+                    </button>
+
+                </div>
+
+                <div id="activityLog" class="activity-log">
+                </div>
+
+            </section>
+
+        </section>
+
+
+        <footer class="footer">
+
+            <span>DEAD MAN SWITCH · LOCAL PROTOTYPE</span>
+
+            <span id="currentTime">
+                —
+            </span>
+
+        </footer>
+
+    </main>
+
+
+    <!-- DEADLINE MODAL -->
+
+    <div id="deadlineModal" class="modal hidden">
+
+        <div class="modal-overlay"></div>
+
+        <div class="modal-box">
+
+            <div class="modal-header">
+
+                <div>
+                    <div class="eyebrow">CONFIGURATION</div>
+                    <h2>Change deadline</h2>
+                </div>
+
+                <button class="modal-close" data-close-modal>
+                    ×
+                </button>
+
+            </div>
+
+            <div class="input-group">
+
+                <label for="deadlineInput">
+                    New deadline
+                </label>
+
+                <input
+                    id="deadlineInput"
+                    type="datetime-local"
+                >
+
+            </div>
+
+            <div class="modal-actions">
+
+                <button class="secondary-button" data-close-modal>
+                    CANCEL
+                </button>
+
+                <button id="saveDeadline" class="primary-button">
+                    SAVE
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- GRACE MODAL -->
+
+    <div id="graceModal" class="modal hidden">
+
+        <div class="modal-overlay"></div>
+
+        <div class="modal-box">
+
+            <div class="modal-header">
+
+                <div>
+                    <div class="eyebrow">CONFIGURATION</div>
+                    <h2>Grace period</h2>
+                </div>
+
+                <button class="modal-close" data-close-modal>
+                    ×
+                </button>
+
+            </div>
+
+            <div class="input-group">
+
+                <label for="graceInput">
+                    Minutes
+                </label>
+
+                <input
+                    id="graceInput"
+                    type="number"
+                    min="0"
+                    max="1440"
+                    value="30"
+                >
+
+            </div>
+
+            <div class="modal-actions">
+
+                <button class="secondary-button" data-close-modal>
+                    CANCEL
+                </button>
+
+                <button id="saveGrace" class="primary-button">
+                    SAVE
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- CONFIRM MODAL -->
+
+    <div id="confirmModal" class="modal hidden">
+
+        <div class="modal-overlay"></div>
+
+        <div class="modal-box confirm-box">
+
+            <div class="confirm-symbol">
+                !
+            </div>
+
+            <h2>Disarm system?</h2>
+
+            <p>
+                The Dead Man Switch will stop monitoring the deadline.
+                You can arm it again later.
+            </p>
+
+            <div class="modal-actions">
+
+                <button class="secondary-button" data-close-modal>
+                    CANCEL
+                </button>
+
+                <button id="confirmDisarm" class="danger-button">
+                    DISARM
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <script src="script.js"></script>
+
+</body>
+</html>
