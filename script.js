@@ -1121,55 +1121,73 @@ if (sendTelegramBtn) {
         telegramStatus.textContent = "Sending...";
 
         try {
-            // Получаем доступные Telegram-чаты
-            const updatesResponse = await fetch("/api/telegram/updates");
-            const updatesData = await updatesResponse.json();
+            // Получаем отмеченные Telegram-чаты
+            const selectedUsers =
+                document.querySelectorAll(
+                    ".telegram-user:checked"
+                );
 
-            if (!updatesResponse.ok) {
+            if (selectedUsers.length === 0) {
                 throw new Error(
-                    updatesData.error || "Failed to get Telegram chats"
+                    "Select at least one Telegram recipient."
                 );
             }
 
-            if (!updatesData.chats || updatesData.chats.length === 0) {
+            const chatIds = Array.from(selectedUsers)
+                .map(checkbox => checkbox.value);
+
+            console.log("Sending to:", chatIds);
+
+            const response = await fetch(
+                "/api/telegram/send",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        chatIds: chatIds,
+
+                        message:
+                            "✅ Dead Man Switch: Telegram connection works!"
+                    })
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
                 throw new Error(
-                    "No Telegram chats found. Open the bot in Telegram and send /start first."
+                    data.error ||
+                    "Failed to send Telegram message"
                 );
             }
 
-            // Берём первый найденный чат
-            const chat = updatesData.chats[0];
+            // Проверяем результаты отправки
+            const successful =
+                data.results.filter(
+                    result => result.success
+                );
 
-            // Отправляем сообщение
-            const sendResponse = await fetch("/api/telegram/send", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    chatIds: [String(chat.id)],
-                    message: "✅ Dead Man Switch: Telegram connection works!"
-                })
-            });
+            const failed =
+                data.results.filter(
+                    result => !result.success
+                );
 
-            const sendData = await sendResponse.json();
+            if (failed.length === 0) {
+                telegramStatus.textContent =
+                    `✓ Sent to ${successful.length} recipient(s)`;
+            } else {
+                telegramStatus.textContent =
+                    `✓ Sent: ${successful.length}, Failed: ${failed.length}`;
 
-            if (!sendResponse.ok) {
-                throw new Error(
-                    sendData.error || "Failed to send Telegram message"
+                console.error(
+                    "Telegram send errors:",
+                    failed
                 );
             }
-
-            const result = sendData.results?.[0];
-
-            if (!result || !result.success) {
-                throw new Error(
-                    result?.error || "Telegram message was not sent"
-                );
-            }
-
-            telegramStatus.textContent =
-                `✓ Message sent to ${chat.title || chat.id}`;
 
         } catch (error) {
             console.error(error);
