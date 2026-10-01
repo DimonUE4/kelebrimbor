@@ -355,6 +355,70 @@ app.post("/api/telegram/send", async (req, res) => {
 });
 
 
+app.get("/api/telegram/connect", async (req, res) => {
+    try {
+        const result =
+            await telegramRequest("getUpdates");
+
+        const users = loadTelegramUsers();
+
+        for (const update of result.result) {
+            const message =
+                update.message ||
+                update.channel_post;
+
+            if (!message || !message.chat) {
+                continue;
+            }
+
+            const chat = message.chat;
+
+            // Нас интересуют личные чаты
+            if (chat.type !== "private") {
+                continue;
+            }
+
+            const existingUser =
+                users.find(
+                    user => user.chatId === chat.id
+                );
+
+            if (!existingUser) {
+                users.push({
+                    chatId: chat.id,
+                    firstName: chat.first_name || "",
+                    lastName: chat.last_name || "",
+                    username: chat.username || "",
+                    connectedAt: new Date().toISOString()
+                });
+            }
+        }
+
+        saveTelegramUsers(users);
+
+        res.json({
+            success: true,
+            users
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+
+app.get("/api/telegram/users", (req, res) => {
+    const users = loadTelegramUsers();
+
+    res.json({
+        success: true,
+        users
+    });
+});
+
 /*
     Frontend
 */
