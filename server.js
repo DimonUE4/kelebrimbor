@@ -15,15 +15,18 @@ console.log(
 );
 
 if (!TELEGRAM_BOT_TOKEN) {
-    console.error("TELEGRAM_BOT_TOKEN is missing in .env");
+    console.error("TELEGRAM_BOT_TOKEN is missing");
     process.exit(1);
 }
 
 app.use(express.json());
 
-app.use(express.static(
-    path.join(__dirname, "public")
-));
+
+/*
+    Serve frontend
+*/
+
+app.use(express.static(__dirname));
 
 
 /*
@@ -31,20 +34,26 @@ app.use(express.static(
 */
 
 async function telegramRequest(method, body = {}) {
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`;
+
+    const url =
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`;
 
     console.log("Telegram request:", method);
+
     console.log(
         "URL:",
         url.replace(TELEGRAM_BOT_TOKEN, "***")
     );
 
     try {
+
         const response = await fetch(url, {
             method: "POST",
+
             headers: {
                 "Content-Type": "application/json"
             },
+
             body: JSON.stringify(body)
         });
 
@@ -63,18 +72,24 @@ async function telegramRequest(method, body = {}) {
         let data;
 
         try {
+
             data = JSON.parse(text);
+
         } catch {
+
             throw new Error(
                 `Telegram returned invalid JSON: ${text}`
             );
+
         }
 
         if (!response.ok || !data.ok) {
+
             throw new Error(
                 data.description ||
                 `Telegram API error: HTTP ${response.status}`
             );
+
         }
 
         return data;
@@ -88,12 +103,14 @@ async function telegramRequest(method, body = {}) {
         console.error(error);
 
         throw error;
+
     }
+
 }
 
 
 /*
-    Check bot
+    Telegram status
 */
 
 app.get("/api/telegram/status", async (req, res) => {
@@ -104,15 +121,21 @@ app.get("/api/telegram/status", async (req, res) => {
             await telegramRequest("getMe");
 
         res.json({
+
             connected: true,
+
             bot: result.result
+
         });
 
     } catch (error) {
 
         res.status(500).json({
+
             connected: false,
+
             error: error.message
+
         });
 
     }
@@ -121,10 +144,7 @@ app.get("/api/telegram/status", async (req, res) => {
 
 
 /*
-    Get updates.
-
-    This allows us to discover chats
-    where the bot has received messages.
+    Get Telegram chats
 */
 
 app.get("/api/telegram/updates", async (req, res) => {
@@ -142,7 +162,10 @@ app.get("/api/telegram/updates", async (req, res) => {
                 update.message ||
                 update.channel_post;
 
-            if (!message || !message.chat) {
+            if (
+                !message ||
+                !message.chat
+            ) {
                 continue;
             }
 
@@ -156,15 +179,22 @@ app.get("/api/telegram/updates", async (req, res) => {
             if (!exists) {
 
                 chats.push({
+
                     id: chat.id,
+
                     type: chat.type,
+
                     title:
                         chat.title ||
-                        [chat.first_name, chat.last_name]
+                        [
+                            chat.first_name,
+                            chat.last_name
+                        ]
                             .filter(Boolean)
                             .join(" ") ||
                         chat.username ||
                         String(chat.id)
+
                 });
 
             }
@@ -172,13 +202,17 @@ app.get("/api/telegram/updates", async (req, res) => {
         }
 
         res.json({
+
             chats
+
         });
 
     } catch (error) {
 
         res.status(500).json({
+
             error: error.message
+
         });
 
     }
@@ -187,7 +221,7 @@ app.get("/api/telegram/updates", async (req, res) => {
 
 
 /*
-    Send message
+    Send Telegram message
 */
 
 app.post("/api/telegram/send", async (req, res) => {
@@ -206,7 +240,9 @@ app.post("/api/telegram/send", async (req, res) => {
         ) {
 
             return res.status(400).json({
+
                 error: "No chats selected"
+
             });
 
         }
@@ -218,7 +254,9 @@ app.post("/api/telegram/send", async (req, res) => {
         ) {
 
             return res.status(400).json({
+
                 error: "Message is empty"
+
             });
 
         }
@@ -271,15 +309,20 @@ app.post("/api/telegram/send", async (req, res) => {
 
 
         res.json({
+
             success: true,
+
             results
+
         });
 
 
     } catch (error) {
 
         res.status(500).json({
+
             error: error.message
+
         });
 
     }
@@ -288,32 +331,42 @@ app.post("/api/telegram/send", async (req, res) => {
 
 
 /*
-    Serve frontend
+    Frontend
 */
 
-app.use((req, res) => {
+app.get("/", (req, res) => {
 
     res.sendFile(
-       path.join(
-    __dirname,
-    "public/index.html"
-)
+        path.join(__dirname, "index.html")
     );
 
 });
 
+
+/*
+    Start server
+*/
+
 app.listen(PORT, () => {
 
     console.log("");
+
     console.log("================================");
     console.log(" DEAD MAN SWITCH");
     console.log("================================");
+
     console.log("");
+
     console.log(
         `Server: http://localhost:${PORT}`
     );
+
     console.log("");
-    console.log("Telegram integration: READY");
+
+    console.log(
+        "Telegram integration: READY"
+    );
+
     console.log("");
 
 });
