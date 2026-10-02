@@ -1117,89 +1117,151 @@ const sendTelegramBtn = document.getElementById("sendTelegramBtn");
 const telegramStatus = document.getElementById("telegramStatus");
 
 if (sendTelegramBtn) {
-    sendTelegramBtn.addEventListener("click", async () => {
-        sendTelegramBtn.disabled = true;
-        telegramStatus.textContent = "Sending...";
 
-        try {
-            // Получаем отмеченные Telegram-чаты
-            const selectedUsers =
-                document.querySelectorAll(
-                    ".telegram-user:checked"
-                );
+    sendTelegramBtn.addEventListener(
+        "click",
+        async () => {
 
-            if (selectedUsers.length === 0) {
-                throw new Error(
-                    "Select at least one Telegram recipient."
-                );
-            }
-
-            const chatIds = Array.from(selectedUsers)
-                .map(checkbox => checkbox.value);
-
-            console.log("Sending to:", chatIds);
-
-            const response = await fetch(
-                "/api/telegram/send",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        chatIds: chatIds,
-
-                        message:
-                            "✅ Dead Man Switch: Telegram connection works!"
-                    })
-                }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    data.error ||
-                    "Failed to send Telegram message"
-                );
-            }
-
-            // Проверяем результаты отправки
-            const successful =
-                data.results.filter(
-                    result => result.success
-                );
-
-            const failed =
-                data.results.filter(
-                    result => !result.success
-                );
-
-            if (failed.length === 0) {
-                telegramStatus.textContent =
-                    `✓ Sent to ${successful.length} recipient(s)`;
-            } else {
-                telegramStatus.textContent =
-                    `✓ Sent: ${successful.length}, Failed: ${failed.length}`;
-
-                console.error(
-                    "Telegram send errors:",
-                    failed
-                );
-            }
-
-        } catch (error) {
-            console.error(error);
+            sendTelegramBtn.disabled = true;
 
             telegramStatus.textContent =
-                `✕ ${error.message}`;
+                "Sending...";
 
-        } finally {
-            sendTelegramBtn.disabled = false;
+            try {
+
+                const selectedUsers =
+                    document.querySelectorAll(
+                        ".telegram-user:checked"
+                    );
+
+                if (
+                    selectedUsers.length === 0
+                ) {
+                    throw new Error(
+                        "Select at least one Telegram recipient."
+                    );
+                }
+
+                const formData =
+                    new FormData();
+
+                selectedUsers.forEach(
+                    checkbox => {
+
+                        const chatId =
+                            checkbox.value;
+
+                        const messageInput =
+                            document.querySelector(
+                                `.telegram-message-input[data-chat-id="${chatId}"]`
+                            );
+
+                        const mediaInput =
+                            document.querySelector(
+                                `.telegram-media-input[data-chat-id="${chatId}"]`
+                            );
+
+                        const message =
+                            messageInput?.value || "";
+
+                        const media =
+                            mediaInput?.files?.[0];
+
+                        if (
+                            !message.trim() &&
+                            !media
+                        ) {
+                            throw new Error(
+                                "Every recipient must have a message or media."
+                            );
+                        }
+
+                        formData.append(
+                            "chatIds",
+                            chatId
+                        );
+
+                        formData.append(
+                            "messages",
+                            message
+                        );
+
+                        if (media) {
+
+                            formData.append(
+                                `media_${chatId}`,
+                                media
+                            );
+
+                        }
+                    }
+                );
+
+                const response =
+                    await fetch(
+                        "/api/telegram/send-custom",
+                        {
+                            method: "POST",
+                            body: formData
+                        }
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.error ||
+                        "Failed to send Telegram messages"
+                    );
+                }
+
+                const successful =
+                    data.results.filter(
+                        result =>
+                            result.success
+                    );
+
+                const failed =
+                    data.results.filter(
+                        result =>
+                            !result.success
+                    );
+
+                if (
+                    failed.length === 0
+                ) {
+
+                    telegramStatus.textContent =
+                        `✓ Sent to ${successful.length} recipient(s)`;
+
+                } else {
+
+                    telegramStatus.textContent =
+                        `✓ Sent: ${successful.length}, Failed: ${failed.length}`;
+
+                    console.error(
+                        "Telegram errors:",
+                        failed
+                    );
+                }
+
+            } catch (error) {
+
+                console.error(error);
+
+                telegramStatus.textContent =
+                    `✕ ${error.message}`;
+
+            } finally {
+
+                sendTelegramBtn.disabled =
+                    false;
+
+            }
         }
-    });
+    );
 }
 
 
@@ -1390,7 +1452,9 @@ function updateMessageFields() {
 
         container.innerHTML = `
             <h4>
-                Message for ${name || "Unknown user"}
+                Message for ${escapeHtml(
+                    name || "Unknown user"
+                )}
             </h4>
 
             <textarea
@@ -1399,10 +1463,63 @@ function updateMessageFields() {
                 rows="5"
                 placeholder="Message for this person..."
             ></textarea>
+
+            <div class="telegram-media-field">
+
+                <label>
+                    Media
+                </label>
+
+                <input
+                    type="file"
+                    class="telegram-media-input"
+                    data-chat-id="${chatId}"
+                    accept="image/*,video/*"
+                >
+
+                <div
+                    class="telegram-media-name"
+                    data-chat-id="${chatId}"
+                >
+                    No media selected
+                </div>
+
+            </div>
         `;
 
         selectedMessages.appendChild(
             container
+        );
+
+        const mediaInput =
+            container.querySelector(
+                ".telegram-media-input"
+            );
+
+        const mediaName =
+            container.querySelector(
+                ".telegram-media-name"
+            );
+
+        mediaInput.addEventListener(
+            "change",
+            () => {
+
+                if (
+                    mediaInput.files &&
+                    mediaInput.files.length > 0
+                ) {
+
+                    mediaName.textContent =
+                        mediaInput.files[0].name;
+
+                } else {
+
+                    mediaName.textContent =
+                        "No media selected";
+
+                }
+            }
         );
     });
 }
@@ -1445,11 +1562,23 @@ if (saveSwitchBtn) {
                                 `.telegram-message-input[data-chat-id="${checkbox.value}"]`
                             );
 
-                        recipients.push({
-                            chatId: checkbox.value,
-                            message:
-                                messageInput?.value || ""
-                        });
+                        const mediaInput =
+    document.querySelector(
+        `.telegram-media-input[data-chat-id="${checkbox.value}"]`
+    );
+
+const media =
+    mediaInput?.files?.[0] || null;
+
+recipients.push({
+    chatId: checkbox.value,
+
+    message:
+        messageInput?.value || "",
+
+    hasMedia:
+        Boolean(media)
+});
                     }
                 );
 
