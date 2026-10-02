@@ -32,6 +32,8 @@ const DEFAULT_CONFIG = {
 
     triggered: false,
 
+    telegramRecipients: [],
+
     activity: []
 
 };
@@ -582,6 +584,8 @@ function handleDeadlineReached() {
     saveState();
 
     render();
+
+    sendSavedTriggerMessages();
 
 }
 
@@ -1403,12 +1407,6 @@ const selectedMessages =
 const saveSwitchBtn =
     document.getElementById("saveSwitchBtn");
 
-const testTriggerBtn =
-    document.getElementById("testTriggerBtn");
-
-const switchDeadlineInput =
-    document.getElementById("switchDeadlineInput");
-
 const switchStatus =
     document.getElementById("switchStatus");
 
@@ -1532,15 +1530,6 @@ if (saveSwitchBtn) {
 
             try {
 
-                const deadline =
-                    switchDeadlineInput.value;
-
-                if (!deadline) {
-                    throw new Error(
-                        "Select a deadline."
-                    );
-                }
-
                 const checkboxes =
                     document.querySelectorAll(
                         ".telegram-user:checked"
@@ -1554,42 +1543,47 @@ if (saveSwitchBtn) {
 
                 const recipients = [];
 
-                checkboxes.forEach(
-                    checkbox => {
+                for (const checkbox of checkboxes) {
 
-                        const messageInput =
-                            document.querySelector(
-                                `.telegram-message-input[data-chat-id="${checkbox.value}"]`
-                            );
+                    const chatId = checkbox.value;
 
-                        const mediaInput =
-    document.querySelector(
-        `.telegram-media-input[data-chat-id="${checkbox.value}"]`
-    );
+                    const messageInput =
+                        document.querySelector(
+                            `.telegram-message-input[data-chat-id="${chatId}"]`
+                        );
 
-const media =
-    mediaInput?.files?.[0] || null;
+                    const mediaInput =
+                        document.querySelector(
+                            `.telegram-media-input[data-chat-id="${chatId}"]`
+                        );
 
-recipients.push({
-    chatId: checkbox.value,
+                    const media =
+                        mediaInput?.files?.[0] || null;
 
-    message:
-        messageInput?.value || "",
+                    const message =
+                        messageInput?.value || "";
 
-    hasMedia:
-        Boolean(media)
-});
-                    }
-                );
-
-                for (const recipient of recipients) {
-
-                    if (!recipient.message.trim()) {
+                    if (!message.trim() && !media) {
                         throw new Error(
-                            "Every recipient must have a message."
+                            "Every selected user needs a message or media."
                         );
                     }
+
+                    const recipient = {
+                        chatId,
+                        message: message.trim(),
+                        hasMedia: Boolean(media),
+                        mediaName: media?.name || "",
+                        mediaType: media?.type || "",
+                        mediaData: media ? await fileToDataUrl(media) : ""
+                    };
+
+                    recipients.push(recipient);
                 }
+
+                state.telegramRecipients = recipients;
+
+                saveState();
 
                 const response =
                     await fetch(
@@ -1603,8 +1597,14 @@ recipients.push({
                             },
 
                             body: JSON.stringify({
-                                deadline,
-                                recipients
+                                deadline: state.deadline,
+                                recipients: recipients.map(
+                                    ({ chatId, message, hasMedia }) => ({
+                                        chatId,
+                                        message,
+                                        hasMedia
+                                    })
+                                )
                             })
                         }
                     );
@@ -1620,7 +1620,12 @@ recipients.push({
                 }
 
                 switchStatus.textContent =
-                    "✓ Dead Man Switch saved.";
+                    "✓ Trigger settings saved.";
+
+                addActivity(
+                    `Telegram trigger settings saved for ${recipients.length} user(s)`,
+                    "success"
+                );
 
             } catch (error) {
 
@@ -1630,5 +1635,125 @@ recipients.push({
                     `✕ ${error.message}`;
             }
         }
+    );
+}
+
+async function sendSavedTriggerMessages() {
+
+    if (!Array.isArray(state.telegramRecipients) || state.telegramRecipients.length === 0) {
+        return;
+    }
+
+    const formData = new FormData();
+
+    state.telegramRecipients.forEach(recipient => {
+
+        if (!recipient?.chatId) {
+            return;
+        }
+
+        formData.append(
+            "chatIds",
+            recipient.chatId
+        );
+
+        formData.append(
+            "messages",
+            recipient.message || ""
+        );
+
+        if (recipient.mediaData) {
+
+            const mediaFile =
+                dataUrlToFile(
+                    recipient.mediaData,
+                    recipient.mediaName || `media-${recipient.chatId}`
+                );
+
+            formData.append(
+                `media_${recipient.chatId}`,
+                mediaFile
+            );
+        }
+    });
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/telegram/send-custom",
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.error ||
+                "Failed to send saved trigger messages"
+            );
+        }
+
+        const successful =
+            data.results.filter(
+                item => item.success
+            ).length;
+
+        addActivity(
+            `Trigger sent to ${successful} recipient(s)`,
+            "success"
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        addActivity(
+            `Trigger failed: ${error.message}`,
+            "warning"
+        );
+    }
+}
+
+function fileToDataUrl(file) {
+
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error("Failed to read file."));
+        reader.readAsDataURL(file);
+    });
+}
+
+function dataUrlToFile(dataUrl, filename) {
+
+    const match =
+        dataUrl.match(/^data:(.*?);base64,(.*)$/);
+
+    if (!match) {
+        return new File(
+            [dataUrl],
+            filename,
+            { type: "application/octet-stream" }
+        );
+    }
+
+    const mime = match[1] || "application/octet-stream";
+    const base64 = match[2];
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index++) {
+        bytes[index] = binary.charCodeAt(index);
+    }
+
+    return new File(
+        [bytes],
+        filename,
+        { type: mime }
     );
 }
