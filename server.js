@@ -36,6 +36,55 @@ function saveTelegramUsers(users) {
     );
 }
 
+function normalizeTelegramUser(chat) {
+    if (!chat || chat.type !== "private") {
+        return null;
+    }
+
+    const firstName = chat.first_name || "";
+    const lastName = chat.last_name || "";
+    const username = chat.username || "";
+
+    return {
+        chatId: String(chat.id),
+        firstName,
+        lastName,
+        username,
+        connectedAt: new Date().toISOString()
+    };
+}
+
+function mergeTelegramUsers(existingUsers, discoveredUsers) {
+    const users = [...(Array.isArray(existingUsers) ? existingUsers : [])];
+
+    for (const discovered of discoveredUsers) {
+        if (!discovered || !discovered.chatId) {
+            continue;
+        }
+
+        const index = users.findIndex(
+            user => String(user.chatId) === String(discovered.chatId)
+        );
+
+        if (index >= 0) {
+            users[index] = {
+                ...users[index],
+                ...discovered,
+                chatId: String(discovered.chatId),
+                connectedAt: users[index].connectedAt || discovered.connectedAt || new Date().toISOString()
+            };
+            continue;
+        }
+
+        users.push({
+            ...discovered,
+            chatId: String(discovered.chatId)
+        });
+    }
+
+    return users;
+}
+
 function loadSwitchConfig() {
     if (!fs.existsSync(SWITCH_FILE)) {
         return {
@@ -387,48 +436,31 @@ app.post("/api/telegram/send", async (req, res) => {
 
 app.get("/api/telegram/connect", async (req, res) => {
     try {
-        const result =
-            await telegramRequest("getUpdates");
-
-        const users = loadTelegramUsers();
+        const result = await telegramRequest("getUpdates");
+        const currentUsers = loadTelegramUsers();
+        const discoveredUsers = [];
 
         for (const update of result.result) {
-            const message =
-                update.message ||
-                update.channel_post;
+            const message = update.message || update.channel_post;
 
             if (!message || !message.chat) {
                 continue;
             }
 
-            const chat = message.chat;
+            const normalizedUser = normalizeTelegramUser(message.chat);
 
-            // Нас интересуют личные чаты
-            if (chat.type !== "private") {
-                continue;
-            }
-
-            const existingUser =
-                users.find(
-                    user => user.chatId === chat.id
-                );
-
-            if (!existingUser) {
-                users.push({
-                    chatId: chat.id,
-                    firstName: chat.first_name || "",
-                    lastName: chat.last_name || "",
-                    username: chat.username || "",
-                    connectedAt: new Date().toISOString()
-                });
+            if (normalizedUser) {
+                discoveredUsers.push(normalizedUser);
             }
         }
 
-        saveTelegramUsers(users);
+        const mergedUsers = mergeTelegramUsers(currentUsers, discoveredUsers);
+
+        saveTelegramUsers(mergedUsers);
 
         res.json({
             success: true,
-            users
+            users: mergedUsers
         });
 
     } catch (error) {
@@ -437,6 +469,33 @@ app.get("/api/telegram/connect", async (req, res) => {
             error: error.message
         });
     }
+});
+
+function syncTelegramUsers() {
+    const currentUsers = loadTelegramUsers();
+
+    if (!currentUsers.length) {
+        return currentUsers;
+    }
+
+    return currentUsers;
+}
+
+app.use((req, res, next) => {
+    try {
+        const users = loadTelegramUsers();
+        const cleanedUsers = users.map(user => ({
+            ...user,
+            chatId: String(user.chatId)
+        }));
+
+        saveTelegramUsers(cleanedUsers);
+        syncTelegramUsers();
+    } catch (error) {
+        console.error("Telegram sync cleanup failed:", error);
+    }
+
+    next();
 });
 
 
