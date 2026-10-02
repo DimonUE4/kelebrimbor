@@ -931,6 +931,39 @@ button {
     font-size: 10px;
 }
 
+.telegram-media-preview {
+    margin-top: 10px;
+}
+
+.telegram-media-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 8px 10px;
+
+    border: 1px solid var(--border);
+    background: rgba(11, 12, 15, 0.9);
+    color: var(--text);
+    font-size: 10px;
+}
+
+.telegram-media-chip.empty {
+    color: var(--muted-2);
+}
+
+.telegram-media-chip.image img {
+    width: 34px;
+    height: 34px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.telegram-media-icon {
+    font-size: 14px;
+}
+
 .telegram-save-button {
     width: 100%;
     margin-top: 12px;

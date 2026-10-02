@@ -1422,6 +1422,38 @@ function getTelegramRecipient(chatId) {
     );
 }
 
+function getMediaPreviewMarkup(mediaData, mediaName, mediaType) {
+
+    if (!mediaData) {
+        return `
+            <div class="telegram-media-chip empty">
+                <span class="telegram-media-icon">📎</span>
+                <span>No media selected</span>
+            </div>
+        `;
+    }
+
+    const isImage =
+        mediaType?.startsWith("image/") ||
+        mediaData.startsWith("data:image/");
+
+    if (isImage) {
+        return `
+            <div class="telegram-media-chip image">
+                <img src="${mediaData}" alt="${escapeHtml(mediaName || "media preview")}" />
+                <span>${escapeHtml(mediaName || "Image")}</span>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="telegram-media-chip file">
+            <span class="telegram-media-icon">📎</span>
+            <span>${escapeHtml(mediaName || "Media file")}</span>
+        </div>
+    `;
+}
+
 function renderTelegramSettings() {
 
     if (!selectedMessages) {
@@ -1479,8 +1511,8 @@ function renderTelegramSettings() {
                     accept="image/*,video/*"
                 >
 
-                <div class="telegram-media-name" data-chat-id="${chatId}">
-                    ${existing?.mediaName ? escapeHtml(existing.mediaName) : "No media selected"}
+                <div class="telegram-media-preview" data-chat-id="${chatId}">
+                    ${getMediaPreviewMarkup(existing?.mediaData || "", existing?.mediaName || "", existing?.mediaType || "")}
                 </div>
             </div>
 
@@ -1495,14 +1527,27 @@ function renderTelegramSettings() {
         checkbox.addEventListener("change", updateMessageFields);
 
         const mediaInput = container.querySelector(".telegram-media-input");
-        const mediaName = container.querySelector(".telegram-media-name");
+        const mediaPreview = container.querySelector(".telegram-media-preview");
 
-        mediaInput.addEventListener("change", () => {
-            if (mediaInput.files && mediaInput.files.length > 0) {
-                mediaName.textContent = mediaInput.files[0].name;
-            } else {
-                mediaName.textContent = "No media selected";
+        mediaInput.addEventListener("change", async () => {
+            const selectedFile = mediaInput.files?.[0];
+
+            if (!selectedFile) {
+                mediaPreview.innerHTML = getMediaPreviewMarkup(
+                    existing?.mediaData || "",
+                    existing?.mediaName || "",
+                    existing?.mediaType || ""
+                );
+                return;
             }
+
+            const dataUrl = await fileToDataUrl(selectedFile);
+
+            mediaPreview.innerHTML = getMediaPreviewMarkup(
+                dataUrl,
+                selectedFile.name,
+                selectedFile.type
+            );
         });
 
         const saveButton = container.querySelector(".telegram-save-button");
@@ -1510,14 +1555,15 @@ function renderTelegramSettings() {
             const messageInput = container.querySelector(".telegram-message-input");
             const currentMessage = messageInput.value.trim();
             const media = mediaInput.files?.[0] || null;
+            const mediaData = media ? await fileToDataUrl(media) : existing?.mediaData || "";
 
             const recipient = {
                 chatId,
                 message: currentMessage,
-                hasMedia: Boolean(media),
+                hasMedia: Boolean(media || existing?.mediaData),
                 mediaName: media?.name || existing?.mediaName || "",
                 mediaType: media?.type || existing?.mediaType || "",
-                mediaData: media ? await fileToDataUrl(media) : existing?.mediaData || ""
+                mediaData
             };
 
             const index = state.telegramRecipients.findIndex(
@@ -1531,6 +1577,7 @@ function renderTelegramSettings() {
             }
 
             saveState();
+            renderTelegramSettings();
             switchStatus.textContent = `✓ Saved message for ${name || "user"}.`;
             addActivity(`Saved Telegram message for ${name || "user"}`, "success");
         });
@@ -1586,6 +1633,7 @@ if (saveSwitchBtn) {
                 for (const checkbox of checkboxes) {
 
                     const chatId = checkbox.value;
+                    const savedRecipient = getTelegramRecipient(chatId);
 
                     const messageInput =
                         document.querySelector(
@@ -1601,9 +1649,20 @@ if (saveSwitchBtn) {
                         mediaInput?.files?.[0] || null;
 
                     const message =
-                        messageInput?.value || "";
+                        messageInput?.value || savedRecipient?.message || "";
 
-                    if (!message.trim() && !media) {
+                    const mediaData =
+                        media
+                            ? await fileToDataUrl(media)
+                            : savedRecipient?.mediaData || "";
+
+                    const mediaName =
+                        media?.name || savedRecipient?.mediaName || "";
+
+                    const mediaType =
+                        media?.type || savedRecipient?.mediaType || "";
+
+                    if (!message.trim() && !mediaData) {
                         throw new Error(
                             "Every selected user needs a message or media."
                         );
@@ -1612,13 +1671,22 @@ if (saveSwitchBtn) {
                     const recipient = {
                         chatId,
                         message: message.trim(),
-                        hasMedia: Boolean(media),
-                        mediaName: media?.name || "",
-                        mediaType: media?.type || "",
-                        mediaData: media ? await fileToDataUrl(media) : ""
+                        hasMedia: Boolean(mediaData),
+                        mediaName,
+                        mediaType,
+                        mediaData
                     };
 
                     recipients.push(recipient);
+                    const index = state.telegramRecipients.findIndex(
+                        item => String(item.chatId) === String(chatId)
+                    );
+
+                    if (index >= 0) {
+                        state.telegramRecipients[index] = recipient;
+                    } else {
+                        state.telegramRecipients.push(recipient);
+                    }
                 }
 
                 state.telegramRecipients = recipients;
