@@ -85,7 +85,7 @@ const deadlineModal = document.getElementById("deadlineModal");
 const graceModal = document.getElementById("graceModal");
 const confirmModal = document.getElementById("confirmModal");
 
-const deadlineInput = document.getElementById("deadlineInput");
+const modalDeadlineInput = document.getElementById("modalDeadlineInput");
 const graceInput = document.getElementById("graceInput");
 
 const saveDeadlineButton = document.getElementById("saveDeadline");
@@ -605,7 +605,7 @@ function openDeadlineModal() {
         .slice(0, 16);
 
 
-    deadlineInput.value = local;
+    modalDeadlineInput.value = local;
 
     deadlineModal.classList.remove("hidden");
 
@@ -614,7 +614,7 @@ function openDeadlineModal() {
 
 function saveDeadline() {
 
-    if (!deadlineInput.value) {
+    if (!modalDeadlineInput.value) {
 
         return;
     }
@@ -622,7 +622,7 @@ function saveDeadline() {
 
     const date =
         new Date(
-            deadlineInput.value
+            modalDeadlineInput.value
         );
 
 
@@ -1406,8 +1406,8 @@ const saveSwitchBtn =
 const testTriggerBtn =
     document.getElementById("testTriggerBtn");
 
-const deadlineInput =
-    document.getElementById("deadlineInput");
+const switchDeadlineInput =
+    document.getElementById("switchDeadlineInput");
 
 const switchStatus =
     document.getElementById("switchStatus");
@@ -1533,7 +1533,7 @@ if (saveSwitchBtn) {
             try {
 
                 const deadline =
-                    deadlineInput.value;
+                    switchDeadlineInput.value;
 
                 if (!deadline) {
                     throw new Error(

@@ -197,6 +197,10 @@
     </button>
 
     <div id="telegramUsersList"></div>
+
+    <div id="selectedMessages" class="telegram-message-builder">
+        <p>Select at least one user to write a custom message for them.</p>
+    </div>
 </div>
 
                 <button id="aliveButton" class="alive-button">
@@ -391,21 +395,15 @@
     <h2>Dead Man Switch</h2>
 
     <div>
-        <label for="deadlineInput">
+        <label for="switchDeadlineInput">
             Deadline
         </label>
 
         <input
             type="datetime-local"
-            id="deadlineInput"
+            id="switchDeadlineInput"
         >
     </div>
-
-    <h3>Telegram Recipients</h3>
-
-    <div id="telegramUsersList"></div>
-
-    <div id="selectedMessages"></div>
 
     <button id="saveSwitchBtn">
         SAVE SWITCH
@@ -483,7 +481,7 @@
                 </label>
 
                 <input
-                    id="deadlineInput"
+                    id="modalDeadlineInput"
                     type="datetime-local"
                 >
 

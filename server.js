@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 const USERS_FILE = path.join(__dirname, "telegram-users.json");
+const SWITCH_FILE = path.join(__dirname, "switch-config.json");
 
 function loadTelegramUsers() {
     if (!fs.existsSync(USERS_FILE)) {
@@ -31,6 +32,34 @@ function saveTelegramUsers(users) {
     fs.writeFileSync(
         USERS_FILE,
         JSON.stringify(users, null, 2),
+        "utf8"
+    );
+}
+
+function loadSwitchConfig() {
+    if (!fs.existsSync(SWITCH_FILE)) {
+        return {
+            deadline: null,
+            recipients: []
+        };
+    }
+
+    try {
+        return JSON.parse(
+            fs.readFileSync(SWITCH_FILE, "utf8")
+        );
+    } catch {
+        return {
+            deadline: null,
+            recipients: []
+        };
+    }
+}
+
+function saveSwitchConfig(config) {
+    fs.writeFileSync(
+        SWITCH_FILE,
+        JSON.stringify(config, null, 2),
         "utf8"
     );
 }
@@ -420,6 +449,73 @@ app.get("/api/telegram/users", (req, res) => {
     });
 });
 
+app.get("/api/switch/config", (req, res) => {
+    const config = loadSwitchConfig();
+
+    res.json({
+        success: true,
+        config
+    });
+});
+
+app.post("/api/switch/save", (req, res) => {
+    try {
+        const { deadline, recipients } = req.body || {};
+
+        if (!deadline) {
+            return res.status(400).json({
+                success: false,
+                error: "Deadline is required."
+            });
+        }
+
+        if (!Array.isArray(recipients) || recipients.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "At least one recipient is required."
+            });
+        }
+
+        const normalizedRecipients = recipients.map((recipient) => {
+            const chatId = String(recipient.chatId || "").trim();
+            const message = String(recipient.message || "").trim();
+
+            if (!chatId) {
+                throw new Error("Every recipient must have a chatId.");
+            }
+
+            if (!message && !recipient.hasMedia) {
+                throw new Error("Every recipient must have a message or media.");
+            }
+
+            return {
+                chatId,
+                message,
+                hasMedia: Boolean(recipient.hasMedia)
+            };
+        });
+
+        const config = {
+            deadline,
+            recipients: normalizedRecipients,
+            updatedAt: new Date().toISOString()
+        };
+
+        saveSwitchConfig(config);
+
+        res.json({
+            success: true,
+            config
+        });
+
+    } catch (error) {
+        res.status(400).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 /*
     Frontend
 */
@@ -475,12 +571,16 @@ app.post(
             const chatIds =
                 Array.isArray(req.body.chatIds)
                     ? req.body.chatIds
-                    : [req.body.chatIds];
+                    : req.body.chatIds
+                        ? [req.body.chatIds]
+                        : [];
 
             const messages =
                 Array.isArray(req.body.messages)
                     ? req.body.messages
-                    : [req.body.messages];
+                    : req.body.messages
+                        ? [req.body.messages]
+                        : [];
 
             const results = [];
 
