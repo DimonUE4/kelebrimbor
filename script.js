@@ -1422,9 +1422,9 @@ function getTelegramRecipient(chatId) {
     );
 }
 
-function getMediaPreviewMarkup(mediaData, mediaName, mediaType) {
+function getMediaPreviewMarkup(items = []) {
 
-    if (!mediaData) {
+    if (!Array.isArray(items) || items.length === 0) {
         return `
             <div class="telegram-media-chip empty">
                 <span class="telegram-media-icon">📎</span>
@@ -1433,25 +1433,31 @@ function getMediaPreviewMarkup(mediaData, mediaName, mediaType) {
         `;
     }
 
-    const isImage =
-        mediaType?.startsWith("image/") ||
-        mediaData.startsWith("data:image/");
+    return items.map(item => {
+        const mediaData = item?.mediaData || "";
+        const mediaName = item?.mediaName || "Media file";
+        const mediaType = item?.mediaType || "";
 
-    if (isImage) {
+        const isImage =
+            mediaType.startsWith("image/") ||
+            mediaData.startsWith("data:image/");
+
+        if (isImage) {
+            return `
+                <div class="telegram-media-chip image">
+                    <img src="${mediaData}" alt="${escapeHtml(mediaName || "media preview")}" />
+                    <span>${escapeHtml(mediaName || "Image")}</span>
+                </div>
+            `;
+        }
+
         return `
-            <div class="telegram-media-chip image">
-                <img src="${mediaData}" alt="${escapeHtml(mediaName || "media preview")}" />
-                <span>${escapeHtml(mediaName || "Image")}</span>
+            <div class="telegram-media-chip file">
+                <span class="telegram-media-icon">📎</span>
+                <span>${escapeHtml(mediaName || "Media file")}</span>
             </div>
         `;
-    }
-
-    return `
-        <div class="telegram-media-chip file">
-            <span class="telegram-media-icon">📎</span>
-            <span>${escapeHtml(mediaName || "Media file")}</span>
-        </div>
-    `;
+    }).join("");
 }
 
 function renderTelegramSettings() {
@@ -1476,6 +1482,12 @@ function renderTelegramSettings() {
             user.firstName,
             user.lastName
         ].filter(Boolean).join(" ");
+
+        const mediaItems = Array.isArray(existing?.mediaItems)
+            ? existing.mediaItems
+            : existing?.mediaData
+                ? [{ mediaData: existing.mediaData, mediaName: existing.mediaName || "Media file", mediaType: existing.mediaType || "" }]
+                : [];
 
         const container = document.createElement("div");
         container.className = "telegram-message";
@@ -1509,10 +1521,11 @@ function renderTelegramSettings() {
                     class="telegram-media-input"
                     data-chat-id="${chatId}"
                     accept="image/*,video/*"
+                    multiple
                 >
 
                 <div class="telegram-media-preview" data-chat-id="${chatId}">
-                    ${getMediaPreviewMarkup(existing?.mediaData || "", existing?.mediaName || "", existing?.mediaType || "")}
+                    ${getMediaPreviewMarkup(mediaItems)}
                 </div>
             </div>
 
@@ -1530,40 +1543,54 @@ function renderTelegramSettings() {
         const mediaPreview = container.querySelector(".telegram-media-preview");
 
         mediaInput.addEventListener("change", async () => {
-            const selectedFile = mediaInput.files?.[0];
+            const files = Array.from(mediaInput.files || []);
 
-            if (!selectedFile) {
-                mediaPreview.innerHTML = getMediaPreviewMarkup(
-                    existing?.mediaData || "",
-                    existing?.mediaName || "",
-                    existing?.mediaType || ""
-                );
+            if (files.length === 0) {
+                mediaPreview.innerHTML = getMediaPreviewMarkup(mediaItems);
                 return;
             }
 
-            const dataUrl = await fileToDataUrl(selectedFile);
+            const prepared = [];
 
-            mediaPreview.innerHTML = getMediaPreviewMarkup(
-                dataUrl,
-                selectedFile.name,
-                selectedFile.type
-            );
+            for (const file of files) {
+                prepared.push({
+                    mediaData: await fileToDataUrl(file),
+                    mediaName: file.name,
+                    mediaType: file.type
+                });
+            }
+
+            mediaPreview.innerHTML = getMediaPreviewMarkup(prepared);
         });
 
         const saveButton = container.querySelector(".telegram-save-button");
         saveButton.addEventListener("click", async () => {
             const messageInput = container.querySelector(".telegram-message-input");
             const currentMessage = messageInput.value.trim();
-            const media = mediaInput.files?.[0] || null;
-            const mediaData = media ? await fileToDataUrl(media) : existing?.mediaData || "";
+            const files = Array.from(mediaInput.files || []);
+            const preparedMedia = [];
+
+            for (const file of files) {
+                preparedMedia.push({
+                    mediaData: await fileToDataUrl(file),
+                    mediaName: file.name,
+                    mediaType: file.type
+                });
+            }
+
+            const mergedMedia =
+                preparedMedia.length > 0
+                    ? preparedMedia
+                    : mediaItems;
 
             const recipient = {
                 chatId,
                 message: currentMessage,
-                hasMedia: Boolean(media || existing?.mediaData),
-                mediaName: media?.name || existing?.mediaName || "",
-                mediaType: media?.type || existing?.mediaType || "",
-                mediaData
+                hasMedia: mergedMedia.length > 0,
+                mediaItems: mergedMedia,
+                mediaName: mergedMedia[0]?.mediaName || existing?.mediaName || "",
+                mediaType: mergedMedia[0]?.mediaType || existing?.mediaType || "",
+                mediaData: mergedMedia[0]?.mediaData || existing?.mediaData || ""
             };
 
             const index = state.telegramRecipients.findIndex(
@@ -1645,24 +1672,28 @@ if (saveSwitchBtn) {
                             `.telegram-media-input[data-chat-id="${chatId}"]`
                         );
 
-                    const media =
-                        mediaInput?.files?.[0] || null;
-
+                    const files = Array.from(mediaInput?.files || []);
                     const message =
                         messageInput?.value || savedRecipient?.message || "";
 
-                    const mediaData =
-                        media
-                            ? await fileToDataUrl(media)
-                            : savedRecipient?.mediaData || "";
+                    const mediaItems =
+                        files.length > 0
+                            ? await Promise.all(files.map(async file => ({
+                                mediaData: await fileToDataUrl(file),
+                                mediaName: file.name,
+                                mediaType: file.type
+                            })))
+                            : Array.isArray(savedRecipient?.mediaItems)
+                                ? savedRecipient.mediaItems
+                                : savedRecipient?.mediaData
+                                    ? [{
+                                        mediaData: savedRecipient.mediaData,
+                                        mediaName: savedRecipient.mediaName || "Media file",
+                                        mediaType: savedRecipient.mediaType || ""
+                                    }]
+                                    : [];
 
-                    const mediaName =
-                        media?.name || savedRecipient?.mediaName || "";
-
-                    const mediaType =
-                        media?.type || savedRecipient?.mediaType || "";
-
-                    if (!message.trim() && !mediaData) {
+                    if (!message.trim() && mediaItems.length === 0) {
                         throw new Error(
                             "Every selected user needs a message or media."
                         );
@@ -1671,10 +1702,11 @@ if (saveSwitchBtn) {
                     const recipient = {
                         chatId,
                         message: message.trim(),
-                        hasMedia: Boolean(mediaData),
-                        mediaName,
-                        mediaType,
-                        mediaData
+                        hasMedia: mediaItems.length > 0,
+                        mediaItems,
+                        mediaName: mediaItems[0]?.mediaName || "",
+                        mediaType: mediaItems[0]?.mediaType || "",
+                        mediaData: mediaItems[0]?.mediaData || ""
                     };
 
                     recipients.push(recipient);
@@ -1770,19 +1802,24 @@ async function sendSavedTriggerMessages() {
             recipient.message || ""
         );
 
-        if (recipient.mediaData) {
+        const mediaItems = Array.isArray(recipient.mediaItems)
+            ? recipient.mediaItems
+            : recipient.mediaData
+                ? [{ mediaData: recipient.mediaData, mediaName: recipient.mediaName || "Media file", mediaType: recipient.mediaType || "" }]
+                : [];
 
+        mediaItems.forEach((item, index) => {
             const mediaFile =
                 dataUrlToFile(
-                    recipient.mediaData,
-                    recipient.mediaName || `media-${recipient.chatId}`
+                    item.mediaData,
+                    item.mediaName || `media-${recipient.chatId}-${index}`
                 );
 
             formData.append(
-                `media_${recipient.chatId}`,
+                `media_${recipient.chatId}_${index}`,
                 mediaFile
             );
-        }
+        });
     });
 
     try {
