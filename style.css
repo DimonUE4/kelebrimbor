@@ -824,6 +824,18 @@ button {
     gap: 14px;
 }
 
+.telegram-action-button {
+    width: 100%;
+    height: 46px;
+    margin-bottom: 6px;
+}
+
+.telegram-status {
+    min-height: 18px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
 .telegram-message-builder {
     display: flex;
     flex-direction: column;
@@ -837,6 +849,31 @@ button {
 
     border: 1px solid var(--border);
     background: rgba(18, 20, 24, 0.9);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.telegram-message.selected {
+    border-color: rgba(165, 255, 99, 0.7);
+    box-shadow: 0 0 0 1px rgba(165, 255, 99, 0.15);
+}
+
+.telegram-user-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.telegram-user-header label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
 }
 
 .telegram-message h4 {
@@ -892,6 +929,19 @@ button {
 .telegram-media-name {
     color: var(--muted-2);
     font-size: 10px;
+}
+
+.telegram-save-button {
+    width: 100%;
+    margin-top: 12px;
+    height: 38px;
+    border: 1px solid #324a2a;
+    background: rgba(165, 255, 99, 0.08);
+    color: var(--green);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 
 

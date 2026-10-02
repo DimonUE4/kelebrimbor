@@ -1347,6 +1347,8 @@ telegramUsers = data.users;
     );
 });
 
+renderTelegramSettings();
+
     } catch (error) {
         console.error(error);
 
@@ -1411,62 +1413,64 @@ const switchStatus =
     document.getElementById("switchStatus");
 
 
-function updateMessageFields() {
+function getTelegramRecipient(chatId) {
 
-    const checkboxes =
-        document.querySelectorAll(
-            ".telegram-user:checked"
-        );
+    return state.telegramRecipients.find(
+        recipient =>
+            String(recipient.chatId) ===
+            String(chatId)
+    );
+}
+
+function renderTelegramSettings() {
+
+    if (!selectedMessages) {
+        return;
+    }
 
     selectedMessages.innerHTML = "";
 
-    checkboxes.forEach(checkbox => {
+    if (telegramUsers.length === 0) {
+        selectedMessages.innerHTML =
+            "<p>No Telegram users connected.</p>";
+        return;
+    }
 
-        const chatId = checkbox.value;
+    telegramUsers.forEach(user => {
 
-        const user =
-            telegramUsers.find(
-                user =>
-                    String(user.chatId) ===
-                    String(chatId)
-            );
-
-        if (!user) {
-            return;
-        }
-
+        const chatId = String(user.chatId);
+        const existing = getTelegramRecipient(chatId);
         const name = [
             user.firstName,
             user.lastName
-        ]
-            .filter(Boolean)
-            .join(" ");
+        ].filter(Boolean).join(" ");
 
-        const container =
-            document.createElement("div");
-
-        container.className =
-            "telegram-message";
+        const container = document.createElement("div");
+        container.className = "telegram-message";
 
         container.innerHTML = `
-            <h4>
-                Message for ${escapeHtml(
-                    name || "Unknown user"
-                )}
-            </h4>
+            <div class="telegram-user-header">
+                <label>
+                    <input
+                        type="checkbox"
+                        value="${chatId}"
+                        class="telegram-user"
+                        ${existing ? "checked" : ""}
+                    >
+                    <span>${escapeHtml(name || "Unknown user")}</span>
+                </label>
+            </div>
+
+            <h4>Message</h4>
 
             <textarea
                 class="telegram-message-input"
                 data-chat-id="${chatId}"
                 rows="5"
-                placeholder="Message for this person..."
-            ></textarea>
+                placeholder="Message for this person...">${escapeHtml(existing?.message || "")}</textarea>
 
             <div class="telegram-media-field">
-
-                <label>
-                    Media
-                </label>
+                <label>Media</label>
 
                 <input
                     type="file"
@@ -1475,50 +1479,86 @@ function updateMessageFields() {
                     accept="image/*,video/*"
                 >
 
-                <div
-                    class="telegram-media-name"
-                    data-chat-id="${chatId}"
-                >
-                    No media selected
+                <div class="telegram-media-name" data-chat-id="${chatId}">
+                    ${existing?.mediaName ? escapeHtml(existing.mediaName) : "No media selected"}
                 </div>
-
             </div>
+
+            <button class="telegram-save-button" data-chat-id="${chatId}">
+                Save user
+            </button>
         `;
 
-        selectedMessages.appendChild(
-            container
-        );
+        selectedMessages.appendChild(container);
 
-        const mediaInput =
-            container.querySelector(
-                ".telegram-media-input"
-            );
+        const checkbox = container.querySelector(".telegram-user");
+        checkbox.addEventListener("change", updateMessageFields);
 
-        const mediaName =
-            container.querySelector(
-                ".telegram-media-name"
-            );
+        const mediaInput = container.querySelector(".telegram-media-input");
+        const mediaName = container.querySelector(".telegram-media-name");
 
-        mediaInput.addEventListener(
-            "change",
-            () => {
-
-                if (
-                    mediaInput.files &&
-                    mediaInput.files.length > 0
-                ) {
-
-                    mediaName.textContent =
-                        mediaInput.files[0].name;
-
-                } else {
-
-                    mediaName.textContent =
-                        "No media selected";
-
-                }
+        mediaInput.addEventListener("change", () => {
+            if (mediaInput.files && mediaInput.files.length > 0) {
+                mediaName.textContent = mediaInput.files[0].name;
+            } else {
+                mediaName.textContent = "No media selected";
             }
+        });
+
+        const saveButton = container.querySelector(".telegram-save-button");
+        saveButton.addEventListener("click", async () => {
+            const messageInput = container.querySelector(".telegram-message-input");
+            const currentMessage = messageInput.value.trim();
+            const media = mediaInput.files?.[0] || null;
+
+            const recipient = {
+                chatId,
+                message: currentMessage,
+                hasMedia: Boolean(media),
+                mediaName: media?.name || existing?.mediaName || "",
+                mediaType: media?.type || existing?.mediaType || "",
+                mediaData: media ? await fileToDataUrl(media) : existing?.mediaData || ""
+            };
+
+            const index = state.telegramRecipients.findIndex(
+                item => String(item.chatId) === String(chatId)
+            );
+
+            if (index >= 0) {
+                state.telegramRecipients[index] = recipient;
+            } else {
+                state.telegramRecipients.push(recipient);
+            }
+
+            saveState();
+            switchStatus.textContent = `✓ Saved message for ${name || "user"}.`;
+            addActivity(`Saved Telegram message for ${name || "user"}`, "success");
+        });
+    });
+}
+
+function updateMessageFields() {
+
+    const checkboxes =
+        document.querySelectorAll(
+            ".telegram-user:checked"
         );
+
+    const selected = Array.from(checkboxes).map(
+        checkbox => checkbox.value
+    );
+
+    document.querySelectorAll(".telegram-user").forEach(checkbox => {
+        const card = checkbox.closest(".telegram-message");
+        if (!card) {
+            return;
+        }
+
+        if (selected.includes(checkbox.value)) {
+            card.classList.add("selected");
+        } else {
+            card.classList.remove("selected");
+        }
     });
 }
 
