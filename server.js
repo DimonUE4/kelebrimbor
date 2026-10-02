@@ -460,3 +460,182 @@ app.listen(PORT, () => {
     console.log("");
 
 });
+
+const upload = multer({
+    dest: path.join(__dirname, "uploads")
+});
+
+app.post(
+    "/api/telegram/send-custom",
+    upload.any(),
+    async (req, res) => {
+
+        try {
+
+            const chatIds =
+                Array.isArray(req.body.chatIds)
+                    ? req.body.chatIds
+                    : [req.body.chatIds];
+
+            const messages =
+                Array.isArray(req.body.messages)
+                    ? req.body.messages
+                    : [req.body.messages];
+
+            const results = [];
+
+            for (
+                let i = 0;
+                i < chatIds.length;
+                i++
+            ) {
+
+                const chatId =
+                    chatIds[i];
+
+                const message =
+                    messages[i] || "";
+
+                const media =
+                    req.files.find(
+                        file =>
+                            file.fieldname ===
+                            `media_${chatId}`
+                    );
+
+                try {
+
+                    /*
+                     * TEXT
+                     */
+
+                    if (message.trim()) {
+
+                        await telegramRequest(
+                            "sendMessage",
+                            {
+                                chat_id:
+                                    chatId,
+
+                                text:
+                                    message
+                            }
+                        );
+                    }
+
+
+                    /*
+                     * MEDIA
+                     */
+
+                    if (media) {
+
+                        await sendTelegramMedia(
+                            chatId,
+                            media
+                        );
+                    }
+
+
+                    results.push({
+                        chatId,
+                        success: true
+                    });
+
+                } catch (error) {
+
+                    results.push({
+                        chatId,
+                        success: false,
+                        error:
+                            error.message
+                    });
+                }
+            }
+
+            res.json({
+                success: true,
+                results
+            });
+
+        } catch (error) {
+
+            console.error(error);
+
+            res.status(500).json({
+                success: false,
+                error:
+                    error.message
+            });
+        }
+    }
+);
+
+
+async function sendTelegramMedia(
+    chatId,
+    file
+) {
+
+    const fs = require("fs");
+
+    const formData =
+        new FormData();
+
+    const fileBuffer =
+        fs.readFileSync(
+            file.path
+        );
+
+    const blob =
+        new Blob(
+            [
+                fileBuffer
+            ],
+            {
+                type:
+                    file.mimetype
+            }
+        );
+
+    formData.append(
+        "chat_id",
+        String(chatId)
+    );
+
+    formData.append(
+        "caption",
+        ""
+    );
+
+    formData.append(
+        "document",
+        blob,
+        file.originalname
+    );
+
+    const response =
+        await fetch(
+            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
+            {
+                method: "POST",
+                body: formData
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if (
+        !response.ok ||
+        !data.ok
+    ) {
+
+        throw new Error(
+            data.description ||
+            "Telegram media upload failed"
+        );
+    }
+
+    return data;
+}
