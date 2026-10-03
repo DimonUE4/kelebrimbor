@@ -14,11 +14,11 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const USERS_FILE = path.join(__dirname, "telegram-users.json");
 const SWITCH_FILE = path.join(__dirname, "switch-config.json");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
+const SWITCH_CHECK_INTERVAL_MS = 30000;
 
 function ensureUploadsDirectory() {
-    if (!fs.existsSync(UPLOADS_DIR)) {
-        fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    }
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    fs.mkdirSync(path.join(UPLOADS_DIR, "telegram"), { recursive: true });
 }
 
 ensureUploadsDirectory();
@@ -120,6 +120,86 @@ function saveSwitchConfig(config) {
         JSON.stringify(config, null, 2),
         "utf8"
     );
+}
+
+async function triggerSwitchIfDue() {
+    try {
+        const config = loadSwitchConfig();
+
+        if (!config || !config.deadline || !Array.isArray(config.recipients) || !config.recipients.length) {
+            return false;
+        }
+
+        const deadline = new Date(config.deadline).getTime();
+
+        if (Number.isNaN(deadline) || Date.now() < deadline) {
+            return false;
+        }
+
+        if (config.triggered === true) {
+            return false;
+        }
+
+        for (const recipient of config.recipients) {
+            const chatId = String(recipient.chatId || "").trim();
+            if (!chatId) {
+                continue;
+            }
+
+            const message = String(recipient.message || "").trim();
+
+            if (message) {
+                await telegramRequest("sendMessage", {
+                    chat_id: chatId,
+                    text: message
+                });
+            }
+
+            const mediaFiles = Array.isArray(recipient.mediaFiles)
+                ? recipient.mediaFiles
+                    .map(file => {
+                        if (!file || !file.fileName) {
+                            return null;
+                        }
+
+                        const filePath = path.join(UPLOADS_DIR, "telegram", file.fileName);
+
+                        if (!fs.existsSync(filePath)) {
+                            return null;
+                        }
+
+                        return {
+                            path: filePath,
+                            originalname: file.name || file.fileName,
+                            filename: file.fileName,
+                            mimetype: file.mimeType || "application/octet-stream",
+                            size: file.size || fs.statSync(filePath).size
+                        };
+                    })
+                    .filter(Boolean)
+                : [];
+
+            if (mediaFiles.length > 0) {
+                await sendTelegramMedia(chatId, mediaFiles);
+            }
+        }
+
+        const updatedConfig = {
+            ...config,
+            triggered: true,
+            triggeredAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        saveSwitchConfig(updatedConfig);
+
+        console.log("Switch trigger executed for overdue deadline.");
+        return true;
+
+    } catch (error) {
+        console.error("Switch trigger failed:", error);
+        return false;
+    }
 }
 
 console.log(
@@ -539,16 +619,15 @@ function saveUploadedMedia(file) {
     const extension = path.extname(file.originalname || file.filename || "media");
     const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}${extension || ""}`;
     const chatDir = path.join(UPLOADS_DIR, "telegram");
-    if (!fs.existsSync(chatDir)) {
-        fs.mkdirSync(chatDir, { recursive: true });
-    }
+    fs.mkdirSync(chatDir, { recursive: true });
 
     const targetPath = path.join(chatDir, safeName);
-    fs.copyFileSync(file.path, targetPath);
 
-    try {
-        fs.unlinkSync(file.path);
-    } catch {}
+    if (file.path && fs.existsSync(file.path)) {
+        fs.renameSync(file.path, targetPath);
+    } else {
+        fs.writeFileSync(targetPath, "");
+    }
 
     return {
         name: file.originalname || file.filename || safeName,
@@ -704,6 +783,12 @@ app.listen(PORT, () => {
     );
 
     console.log("");
+
+    triggerSwitchIfDue();
+
+    setInterval(() => {
+        triggerSwitchIfDue();
+    }, SWITCH_CHECK_INTERVAL_MS);
 
 });
 
