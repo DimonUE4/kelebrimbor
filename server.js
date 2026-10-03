@@ -13,6 +13,15 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 const USERS_FILE = path.join(__dirname, "telegram-users.json");
 const SWITCH_FILE = path.join(__dirname, "switch-config.json");
+const UPLOADS_DIR = path.join(__dirname, "uploads");
+
+function ensureUploadsDirectory() {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+        fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    }
+}
+
+ensureUploadsDirectory();
 
 function loadTelegramUsers() {
     if (!fs.existsSync(USERS_FILE)) {
@@ -123,8 +132,9 @@ if (!TELEGRAM_BOT_TOKEN) {
     process.exit(1);
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "100mb" }));
 
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 /*
     Serve frontend
@@ -517,9 +527,100 @@ app.get("/api/switch/config", (req, res) => {
     });
 });
 
-app.post("/api/switch/save", (req, res) => {
+function saveUploadedMedia(file) {
+    const extension = path.extname(file.originalname || file.filename || "media");
+    const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}${extension || ""}`;
+    const chatDir = path.join(UPLOADS_DIR, "telegram");
+    if (!fs.existsSync(chatDir)) {
+        fs.mkdirSync(chatDir, { recursive: true });
+    }
+
+    const targetPath = path.join(chatDir, safeName);
+    fs.copyFileSync(file.path, targetPath);
+
     try {
-        const { deadline, recipients } = req.body || {};
+        fs.unlinkSync(file.path);
+    } catch {}
+
+    return {
+        name: file.originalname || file.filename || safeName,
+        fileName: safeName,
+        mimeType: file.mimetype || "application/octet-stream",
+        size: file.size || 0,
+        url: `/uploads/telegram/${safeName}`
+    };
+}
+
+app.post("/api/switch/save", upload.any(), (req, res) => {
+    try {
+        const rawDeadline = req.body.deadline || req.body["deadline"] || null;
+        const deadline = rawDeadline ? String(rawDeadline) : null;
+
+        let bodyRecipients = req.body.recipients;
+        if (typeof bodyRecipients === "string") {
+            try {
+                bodyRecipients = JSON.parse(bodyRecipients);
+            } catch {
+                bodyRecipients = null;
+            }
+        }
+
+        const rawChatIds = Array.isArray(req.body.chatIds)
+            ? req.body.chatIds
+            : req.body.chatIds
+                ? [req.body.chatIds]
+                : [];
+
+        const rawMessages = Array.isArray(req.body.messages)
+            ? req.body.messages
+            : req.body.messages
+                ? [req.body.messages]
+                : [];
+
+        const filesByChat = {};
+
+        for (const file of req.files || []) {
+            const match = file.fieldname.match(/^media_(.+?)(?:_(\d+))?$/);
+            if (!match) continue;
+
+            const chatId = match[1];
+            const index = Number(match[2] || 0);
+            if (!filesByChat[chatId]) filesByChat[chatId] = [];
+            filesByChat[chatId][index] = file;
+        }
+
+        const recipients = [];
+        const sourceRecipients = Array.isArray(bodyRecipients) && bodyRecipients.length > 0
+            ? bodyRecipients
+            : rawChatIds.length > 0
+                ? rawChatIds.map((chatId, index) => ({
+                    chatId,
+                    message: rawMessages[index] || "",
+                    mediaFiles: []
+                }))
+                : [];
+
+        for (const recipient of sourceRecipients) {
+            const chatId = String(recipient.chatId || "").trim();
+            const message = String(recipient.message || "").trim();
+            const mediaFiles = [];
+
+            const files = filesByChat[chatId] || [];
+            for (const file of files.filter(Boolean)) {
+                const savedFile = saveUploadedMedia(file);
+                mediaFiles.push(savedFile);
+            }
+
+            if (!chatId) continue;
+
+            recipients.push({
+                chatId,
+                message,
+                hasMedia: mediaFiles.length > 0 || Boolean(recipient.hasMedia),
+                mediaFiles,
+                updatedAt: new Date().toISOString()
+            });
+        }
 
         if (!deadline) {
             return res.status(400).json({
@@ -528,35 +629,16 @@ app.post("/api/switch/save", (req, res) => {
             });
         }
 
-        if (!Array.isArray(recipients) || recipients.length === 0) {
+        if (!recipients.length) {
             return res.status(400).json({
                 success: false,
                 error: "At least one recipient is required."
             });
         }
 
-        const normalizedRecipients = recipients.map((recipient) => {
-            const chatId = String(recipient.chatId || "").trim();
-            const message = String(recipient.message || "").trim();
-
-            if (!chatId) {
-                throw new Error("Every recipient must have a chatId.");
-            }
-
-            if (!message && !recipient.hasMedia) {
-                throw new Error("Every recipient must have a message or media.");
-            }
-
-            return {
-                chatId,
-                message,
-                hasMedia: Boolean(recipient.hasMedia)
-            };
-        });
-
         const config = {
             deadline,
-            recipients: normalizedRecipients,
+            recipients,
             updatedAt: new Date().toISOString()
         };
 
@@ -568,6 +650,7 @@ app.post("/api/switch/save", (req, res) => {
         });
 
     } catch (error) {
+        console.error("save switch error:", error);
         res.status(400).json({
             success: false,
             error: error.message

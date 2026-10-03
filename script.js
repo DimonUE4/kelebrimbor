@@ -47,6 +47,54 @@ let state = loadState();
 let telegramUsers = [];
 const mediaStore = new Map();
 
+async function loadSavedSwitchConfig() {
+    try {
+        const response = await fetch("/api/switch/config");
+        const data = await response.json();
+
+        if (!response.ok || !data.success) {
+            return;
+        }
+
+        if (!Array.isArray(data.config?.recipients)) {
+            return;
+        }
+
+        state.telegramRecipients = data.config.recipients.map(recipient => ({
+            chatId: String(recipient.chatId),
+            message: recipient.message || "",
+            hasMedia: Boolean(recipient.mediaFiles?.length),
+            mediaItems: Array.isArray(recipient.mediaFiles)
+                ? recipient.mediaFiles.map(file => ({
+                    mediaName: file.name || file.fileName || "Media file",
+                    mediaType: file.mimeType || "",
+                    mediaData: file.url || ""
+                }))
+                : [],
+            mediaName: recipient.mediaFiles?.[0]?.name || recipient.mediaFiles?.[0]?.fileName || "",
+            mediaType: recipient.mediaFiles?.[0]?.mimeType || "",
+            mediaData: recipient.mediaFiles?.[0]?.url || ""
+        }));
+
+        data.config.recipients.forEach(recipient => {
+            if (Array.isArray(recipient.mediaFiles)) {
+                mediaStore.set(String(recipient.chatId), recipient.mediaFiles.map(file => ({
+                    mediaName: file.name || file.fileName || "Media file",
+                    mediaType: file.mimeType || "",
+                    mediaData: file.url || ""
+                })));
+            }
+        });
+
+        if (typeof renderTelegramSettings === "function") {
+            renderTelegramSettings();
+        }
+
+    } catch (error) {
+        console.error("Failed to load saved trigger config:", error);
+    }
+}
+
 
 /* =========================================
    DOM
@@ -104,9 +152,11 @@ const editGraceButton = document.getElementById("editGrace");
    INITIALIZATION
 ========================================= */
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
 
     setupEvents();
+
+    await loadSavedSwitchConfig();
 
     if (sessionStorage.getItem("authenticated") === "true") {
 
@@ -1775,27 +1825,36 @@ if (saveSwitchBtn) {
 
                 saveState();
 
+                const formData = new FormData();
+                formData.append("deadline", state.deadline);
+
+                recipients.forEach((recipient, index) => {
+                    formData.append("chatIds", recipient.chatId);
+                    formData.append("messages", recipient.message || "");
+
+                    recipient.mediaItems.forEach((item, itemIndex) => {
+                        if (!item.mediaData || !item.mediaData.startsWith("data:")) {
+                            return;
+                        }
+
+                        const mediaFile = dataUrlToFile(
+                            item.mediaData,
+                            item.mediaName || `media-${recipient.chatId}-${itemIndex}`
+                        );
+
+                        formData.append(
+                            `media_${recipient.chatId}_${itemIndex}`,
+                            mediaFile
+                        );
+                    });
+                });
+
                 const response =
                     await fetch(
                         "/api/switch/save",
                         {
                             method: "POST",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-                                deadline: state.deadline,
-                                recipients: recipients.map(
-                                    ({ chatId, message, hasMedia }) => ({
-                                        chatId,
-                                        message,
-                                        hasMedia
-                                    })
-                                )
-                            })
+                            body: formData
                         }
                     );
 
