@@ -1346,6 +1346,8 @@ telegramUsers = data.users;
         .filter(Boolean)
         .join(" ");
 
+    element.className = "telegram-user-card";
+
     element.innerHTML = `
         <label>
             <input
@@ -1354,13 +1356,10 @@ telegramUsers = data.users;
                 class="telegram-user"
             >
 
-            ${name || "Unknown user"}
-
-            ${
-                user.username
-                    ? `(@${user.username})`
-                    : ""
-            }
+            <span class="telegram-user-name">
+                <span>${escapeHtml(name || "Unknown user")}</span>
+                <small>${escapeHtml(user.username ? `@${user.username}` : `Chat ID: ${user.chatId}`)}</small>
+            </span>
         </label>
     `;
 

@@ -617,7 +617,11 @@ app.listen(PORT, () => {
 });
 
 const upload = multer({
-    dest: path.join(__dirname, "uploads")
+    dest: path.join(__dirname, "uploads"),
+    limits: {
+        fileSize: 1024 * 1024 * 1024,
+        files: 50
+    }
 });
 
 app.post(
@@ -641,6 +645,25 @@ app.post(
                         ? [req.body.messages]
                         : [];
 
+            const filesByChat = {};
+
+            for (const file of req.files || []) {
+                const match = file.fieldname.match(/^media_(.+?)(?:_(\d+))?$/);
+
+                if (!match) {
+                    continue;
+                }
+
+                const chatId = match[1];
+                const index = match[2] || "0";
+
+                if (!filesByChat[chatId]) {
+                    filesByChat[chatId] = [];
+                }
+
+                filesByChat[chatId][Number(index)] = file;
+            }
+
             const results = [];
 
             for (
@@ -655,18 +678,11 @@ app.post(
                 const message =
                     messages[i] || "";
 
-                const media =
-                    req.files.find(
-                        file =>
-                            file.fieldname ===
-                            `media_${chatId}`
-                    );
+                const mediaFiles =
+                    Object.values(filesByChat[chatId] || {})
+                        .filter(Boolean);
 
                 try {
-
-                    /*
-                     * TEXT
-                     */
 
                     if (message.trim()) {
 
@@ -682,19 +698,13 @@ app.post(
                         );
                     }
 
-
-                    /*
-                     * MEDIA
-                     */
-
-                    if (media) {
+                    if (mediaFiles.length > 0) {
 
                         await sendTelegramMedia(
                             chatId,
-                            media
+                            mediaFiles
                         );
                     }
-
 
                     results.push({
                         chatId,
@@ -733,68 +743,89 @@ app.post(
 
 async function sendTelegramMedia(
     chatId,
-    file
+    fileOrFiles
 ) {
 
     const fs = require("fs");
+    const files = Array.isArray(fileOrFiles)
+        ? fileOrFiles
+        : [fileOrFiles];
 
-    const formData =
-        new FormData();
+    for (const file of files) {
+        const fileBuffer =
+            fs.readFileSync(
+                file.path
+            );
 
-    const fileBuffer =
-        fs.readFileSync(
-            file.path
+        const blob =
+            new Blob(
+                [
+                    fileBuffer
+                ],
+                {
+                    type:
+                        file.mimetype
+                }
+            );
+
+        const mimeType =
+            file.mimetype || "application/octet-stream";
+
+        let method = "sendDocument";
+        let fieldName = "document";
+
+        if (mimeType.startsWith("video/")) {
+            method = "sendVideo";
+            fieldName = "video";
+        } else if (mimeType.startsWith("image/")) {
+            method = "sendPhoto";
+            fieldName = "photo";
+        }
+
+        const formData =
+            new FormData();
+
+        formData.append(
+            "chat_id",
+            String(chatId)
         );
 
-    const blob =
-        new Blob(
-            [
-                fileBuffer
-            ],
-            {
-                type:
-                    file.mimetype
-            }
+        formData.append(
+            fieldName,
+            blob,
+            file.originalname || file.filename || "media"
         );
 
-    formData.append(
-        "chat_id",
-        String(chatId)
-    );
+        if (method !== "sendPhoto") {
+            formData.append(
+                "caption",
+                ""
+            );
+        }
 
-    formData.append(
-        "caption",
-        ""
-    );
+        const response =
+            await fetch(
+                `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/${method}`,
+                {
+                    method: "POST",
+                    body: formData
+                }
+            );
 
-    formData.append(
-        "document",
-        blob,
-        file.originalname
-    );
+        const data =
+            await response.json();
 
-    const response =
-        await fetch(
-            `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`,
-            {
-                method: "POST",
-                body: formData
-            }
-        );
+        if (
+            !response.ok ||
+            !data.ok
+        ) {
 
-    const data =
-        await response.json();
-
-    if (
-        !response.ok ||
-        !data.ok
-    ) {
-
-        throw new Error(
-            data.description ||
-            "Telegram media upload failed"
-        );
+            throw new Error(
+                data.description ||
+                "Telegram media upload failed"
+            );
+        }
     }
 
-    return data;
+    return true;
 }

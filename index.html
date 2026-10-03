@@ -190,16 +190,21 @@
 </div>
 
                 <div class="telegram-users">
-    <h3>Telegram Recipients</h3>
+    <div class="telegram-panel-header">
+        <h3>Telegram Recipients</h3>
 
-    <button id="connectTelegramBtn" class="secondary-button telegram-action-button">
-        CHECK FOR NEW USERS
-    </button>
+        <button id="connectTelegramBtn" class="secondary-button telegram-action-button">
+            CHECK FOR NEW USERS
+        </button>
+    </div>
 
-    <div id="telegramUsersList"></div>
+    <div id="telegramUsersList" class="telegram-user-list"></div>
 
-    <div id="selectedMessages" class="telegram-message-builder">
-        <p>Select at least one user to write a custom message for them.</p>
+    <div class="telegram-message-settings">
+        <div class="telegram-section-title">Trigger messages</div>
+        <div id="selectedMessages" class="telegram-message-builder">
+            <p>Select at least one user to write a custom message for them.</p>
+        </div>
     </div>
 
     <button id="saveSwitchBtn" class="primary-button">
