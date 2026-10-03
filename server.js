@@ -527,6 +527,14 @@ app.get("/api/switch/config", (req, res) => {
     });
 });
 
+const upload = multer({
+    dest: path.join(__dirname, "uploads"),
+    limits: {
+        fileSize: 1024 * 1024 * 1024,
+        files: 50
+    }
+});
+
 function saveUploadedMedia(file) {
     const extension = path.extname(file.originalname || file.filename || "media");
     const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}${extension || ""}`;
@@ -697,14 +705,6 @@ app.listen(PORT, () => {
 
     console.log("");
 
-});
-
-const upload = multer({
-    dest: path.join(__dirname, "uploads"),
-    limits: {
-        fileSize: 1024 * 1024 * 1024,
-        files: 50
-    }
 });
 
 app.post(
