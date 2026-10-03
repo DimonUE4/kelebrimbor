@@ -45,6 +45,7 @@ const DEFAULT_CONFIG = {
 
 let state = loadState();
 let telegramUsers = [];
+const mediaStore = new Map();
 
 
 /* =========================================
@@ -182,11 +183,42 @@ function loadState() {
 }
 
 
+function sanitizeRecipientForStorage(recipient) {
+
+    if (!recipient) {
+        return recipient;
+    }
+
+    const mediaItems = Array.isArray(recipient.mediaItems)
+        ? recipient.mediaItems.map(item => ({
+            mediaName: item?.mediaName || "Media file",
+            mediaType: item?.mediaType || "",
+            mediaData: ""
+        }))
+        : [];
+
+    return {
+        ...recipient,
+        mediaItems,
+        mediaData: "",
+        mediaName: recipient.mediaName || "",
+        mediaType: recipient.mediaType || "",
+        hasMedia: mediaItems.length > 0 || Boolean(recipient.hasMedia)
+    };
+}
+
 function saveState(newState = state) {
+
+    const safeState = {
+        ...newState,
+        telegramRecipients: Array.isArray(newState.telegramRecipients)
+            ? newState.telegramRecipients.map(sanitizeRecipientForStorage)
+            : []
+    };
 
     localStorage.setItem(
         "deadManSwitch",
-        JSON.stringify(newState)
+        JSON.stringify(safeState)
     );
 
 }
@@ -1422,6 +1454,25 @@ function getTelegramRecipient(chatId) {
     );
 }
 
+function getSavedMediaForChat(chatId) {
+
+    const inState = getTelegramRecipient(chatId);
+
+    if (inState?.mediaItems?.length) {
+        return inState.mediaItems;
+    }
+
+    if (inState?.mediaData) {
+        return [{
+            mediaData: inState.mediaData,
+            mediaName: inState.mediaName || "Media file",
+            mediaType: inState.mediaType || ""
+        }];
+    }
+
+    return mediaStore.get(String(chatId)) || [];
+}
+
 function getMediaPreviewMarkup(items = []) {
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -1483,11 +1534,7 @@ function renderTelegramSettings() {
             user.lastName
         ].filter(Boolean).join(" ");
 
-        const mediaItems = Array.isArray(existing?.mediaItems)
-            ? existing.mediaItems
-            : existing?.mediaData
-                ? [{ mediaData: existing.mediaData, mediaName: existing.mediaName || "Media file", mediaType: existing.mediaType || "" }]
-                : [];
+        const mediaItems = getSavedMediaForChat(chatId);
 
         const container = document.createElement("div");
         container.className = "telegram-message";
@@ -1592,6 +1639,8 @@ function renderTelegramSettings() {
                 mediaType: mergedMedia[0]?.mediaType || existing?.mediaType || "",
                 mediaData: mergedMedia[0]?.mediaData || existing?.mediaData || ""
             };
+
+            mediaStore.set(String(chatId), mergedMedia);
 
             const index = state.telegramRecipients.findIndex(
                 item => String(item.chatId) === String(chatId)
@@ -1709,6 +1758,8 @@ if (saveSwitchBtn) {
                         mediaData: mediaItems[0]?.mediaData || ""
                     };
 
+                    mediaStore.set(String(chatId), mediaItems);
+
                     recipients.push(recipient);
                     const index = state.telegramRecipients.findIndex(
                         item => String(item.chatId) === String(chatId)
@@ -1792,6 +1843,8 @@ async function sendSavedTriggerMessages() {
             return;
         }
 
+        const mediaItems = getSavedMediaForChat(recipient.chatId);
+
         formData.append(
             "chatIds",
             recipient.chatId
@@ -1801,12 +1854,6 @@ async function sendSavedTriggerMessages() {
             "messages",
             recipient.message || ""
         );
-
-        const mediaItems = Array.isArray(recipient.mediaItems)
-            ? recipient.mediaItems
-            : recipient.mediaData
-                ? [{ mediaData: recipient.mediaData, mediaName: recipient.mediaName || "Media file", mediaType: recipient.mediaType || "" }]
-                : [];
 
         mediaItems.forEach((item, index) => {
             const mediaFile =
